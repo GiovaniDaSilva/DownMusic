@@ -13,7 +13,7 @@ export default function DownloadPage() {
           <div className="logo">♪</div>
           <div>
             <h1>DownMusic</h1>
-            <p className="muted">Cole os links do YouTube e deixe o resto com a gente.</p>
+            <p className="muted">Cole links de vídeos, músicas ou playlists (YouTube e YouTube Music) e deixe o resto comigo.</p>
           </div>
           <span className={`status-dot ${q.online ? "on" : "off"}`} title={q.online ? "API conectada" : "API offline"}>
             {q.online ? "API online" : "API offline"}

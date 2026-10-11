@@ -14,6 +14,7 @@ export interface Job {
   title: string | null;
   file: string | null;
   error: string | null;
+  retries?: number;
 }
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";

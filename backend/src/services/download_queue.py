@@ -26,11 +26,13 @@ class Job:
     title: str | None = None
     file: str | None = None
     error: str | None = None
+    retries: int = 0
 
 
 class DownloadQueue:
-    def __init__(self, out_dir: Path, workers: int = 1):
+    def __init__(self, out_dir: Path, workers: int = 1, max_retries: int = 1):
         self.out_dir = out_dir
+        self.max_retries = max_retries
         self.jobs: dict[str, Job] = {}
         self.lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=workers)
@@ -108,12 +110,28 @@ class DownloadQueue:
         return created + playlists
 
     def _expand(self, pl: Job) -> None:
-        try:
-            title, video_urls = expand_playlist(pl.url)
-        except Exception as exc:
-            pl.status, pl.error = "error", str(exc)
-            self._emit(pl)
-            return
+        title = None
+        video_urls = None
+        for attempt in range(self.max_retries + 1):
+            if self.stopping.is_set():
+                return
+            try:
+                title, video_urls = expand_playlist(pl.url)
+                break
+            except Exception as exc:
+                if self.stopping.is_set():
+                    return
+                if attempt < self.max_retries:
+                    pl.retries += 1
+                    print(f"[Queue] Erro ao carregar playlist '{pl.url}': {exc}. Tentando novamente...")
+                    self._emit(pl)
+                    if self.stopping.wait(2.0):
+                        return
+                    continue
+                pl.status, pl.error = "error", str(exc)
+                self._emit(pl)
+                return
+
         if not video_urls:
             pl.status, pl.error = "error", "Playlist vazia ou privada."
             self._emit(pl)
@@ -127,6 +145,7 @@ class DownloadQueue:
         job = self.jobs.get(job_id)
         if not job or job.status != "error":
             return job
+        job.retries = 0
         if job.kind == "playlist":
             job.status, job.error, job.title = "expanding", None, "Lendo playlist…"
             self._emit(job)
@@ -165,11 +184,48 @@ class DownloadQueue:
             job.progress, job.speed, job.eta = p["progress"], p["speed"], p["eta"]
             self._emit(job)
 
-        try:
-            result = download_audio(job.url, self.out_dir, job.fmt, on_progress)
-            job.title, job.file = result["title"], result["file"]
-            job.status, job.progress = "done", 100
-        except Exception as exc:
-            job.status, job.error = "error", str(exc)
+        for attempt in range(self.max_retries + 1):
+            if self.stopping.is_set():
+                return
+            try:
+                result = download_audio(job.url, self.out_dir, job.fmt, on_progress)
+                job.title, job.file = result["title"], result["file"]
+                job.status, job.progress = "done", 100
+                job.error = None
+                break
+            except Exception as exc:
+                if self.stopping.is_set():
+                    return
+                if attempt < self.max_retries:
+                    # Deu erro, tenta de novo
+                    job.retries += 1
+                    print(f"[Queue] Erro ao baixar '{job.video_id or job.url}': {exc}. Tentando novamente...")
+                    job.progress = 0
+                    job.speed = job.eta = None
+                    self._emit(job)
+
+                    # Limpa cache do yt-dlp para nova tentativa limpa
+                    try:
+                        import yt_dlp
+                        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+                            ydl.cache.remove()
+                    except Exception:
+                        pass
+
+                    if self.stopping.wait(2.0):
+                        return
+
+                    existing = find_existing(self.out_dir, job.video_id)
+                    if existing:
+                        job.status, job.progress, job.file = "done", 100, existing.name
+                        job.title = existing.stem.rsplit(" [", 1)[0]
+                        job.error = None
+                        break
+                    continue
+
+                # Esgotou tentativas: deu erro, segue
+                print(f"[Queue] Falha definitiva ao baixar '{job.video_id or job.url}': {exc}. Seguindo para o próximo.")
+                job.status, job.error = "error", str(exc)
+
         job.speed = job.eta = None
         self._emit(job)
