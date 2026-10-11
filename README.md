@@ -1,6 +1,8 @@
 # DownMusic
 
-Uma aplicação simples e moderna para baixar o áudio de vídeos e playlists do YouTube. O projeto é executado inteiramente de forma local.
+Uma aplicação simples e moderna para baixar o áudio de vídeos, músicas e playlists do YouTube e YouTube Music. O projeto é executado inteiramente de forma local.
+
+> ⚡ **Projeto Vibecoding:** Este é um projetinho desenvolvido no estilo **vibecoding** — concebido e construído com assistência de Inteligência Artificial para resolver uma necessidade prática e pessoal de forma rápida, fluida e funcional.
 
 ## Tecnologias
 
@@ -73,7 +75,9 @@ Abra outro terminal na pasta `frontend/`:
 │   ├── src/                 # Código da API e do pipeline de download
 │   ├── .env.example         # Exemplo das configurações
 │   └── requirements.txt     # Dependências do Python
-└── frontend/
-    ├── src/                 # Interface em React/TypeScript
-    └── package.json         # Dependências do Node
+├── frontend/
+│   ├── src/                 # Interface em React/TypeScript
+│   └── package.json         # Dependências do Node
+└── run.bat                  # Script para iniciar backend e frontend juntos no Windows
 ```
+
